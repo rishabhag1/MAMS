@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Military Asset Management System Demo</title>
+<style>
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #121212;
+    color: #eee;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: #1f2937;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: #3b82f6;
+  }
+  main {
+    flex-grow: 1;
+    padding: 1rem 2rem;
+    max-width: 1000px;
+    margin: auto;
+    width: 100%;
+  }
+  select, input[type=date], input[type=number], input[type=text] {
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+    border: none;
+    background: #202938;
+    color: #eee;
+    font-size: 1rem;
+    margin-right: 1rem;
+    min-width: 150px;
+  }
+  button {
+    background: #3b82f6;
+    border: none;
+    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    color: #eee;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  button:hover:not([disabled]) {
+    background: #60a5fa;
+  }
+  button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  nav {
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 1rem;
+  }
+  nav button {
+    background: #374151;
+  }
+  nav button.active {
+    background: #3b82f6;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+  }
+  th, td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #374151;
+    text-align: left;
+    font-size: 0.9rem;
+  }
+  th {
+    background-color: #1e293b;
+  }
+  .filter-group {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+  }
+  .popup-backdrop {
+    position: fixed;
+    top: 0;
+    left:0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+  }
+  .popup {
+    background: #1f2937;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    max-width: 600px;
+    width: 90vw;
+    color: #eee;
+  }
+  .popup h3 {
+    margin-top: 0;
+  }
+  .popup table {
+    margin-top: 0.5rem;
+  }
+  .popup-close {
+    float: right;
+    background: #ef4444;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  footer {
+    background: #1f2937;
+    text-align: center;
+    color: #94a3b8;
+    padding: 0.75rem 1rem;
+    font-size: 0.8rem;
+  }
+  @media (max-width: 600px){
+    .filter-group {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    select, input[type=date], input[type=number], input[type=text] {
+      margin-right: 0;
+      width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>MAMS Demo</h1>
+  <div>
+    <label for="roleSelect" style="margin-right:8px;">Role:</label>
+    <select id="roleSelect" title="Select User Role">
+      <option value="admin">Admin</option>
+      <option value="base_commander">Base Commander</option>
+      <option value="logistics_officer">Logistics Officer</option>
+    </select>
+  </div>
+</header>
+<main id="app-root">
+  <!-- React app will mount here -->
+</main>
+<footer>
+  Military Asset Management System Demo &copy; 2024
+</footer>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+
+const {useState, useEffect, useMemo, useCallback} = React;
+
+// Utility to generate unique IDs for demo (simple incrementing)
+let idCounter = 1;
+const generateId = () => String(idCounter++);
+
+// Hardcoded bases and equipment types for demo
+const BASES = [
+  { id: 'base1', name: 'Alpha Base' },
+  { id: 'base2', name: 'Bravo Base' },
+  { id: 'base3', name: 'Charlie Base' },
+];
+
+const EQUIPMENT_TYPES = [
+  'Vehicle',
+  'Weapon',
+  'Ammunition',
+];
+
+// Helper for date formatting
+const formatDate = dateStr => new Date(dateStr).toLocaleDateString();
+
+// Storage keys
+const STORAGE_KEYS = {
+  ASSETS: 'mams_assets',
+  PURCHASES: 'mams_purchases',
+  TRANSFERS: 'mams_transfers',
+  ASSIGNMENTS: 'mams_assignments',
+  LOGS: 'mams_logs',
+  PERSONNEL: 'mams_personnel',
+  USER_ROLE: 'mams_user_role',
+  USER_BASE: 'mams_user_base',
+};
+
+// Initialize with some personnel for demo
+const initPersonnel = [
+  {id: 'pers1', name:'John Smith', role:'base_commander', baseId: 'base1'},
+  {id: 'pers2', name:'Mary Johnson', role:'logistics_officer'},
+  {id: 'pers3', name:'Admin User', role:'admin'},
+];
+
+// Load or init personnel
+const loadPersonnel = () => {
+  let pers = JSON.parse(localStorage.getItem(STORAGE_KEYS.PERSONNEL));
+  if(!pers || pers.length === 0){
+    pers = initPersonnel;
+    localStorage.setItem(STORAGE_KEYS.PERSONNEL, JSON.stringify(pers));
+  }
+  return pers;
+};
+
+// Helper functions for localStorage CRUD
+const saveData = (key, data) => localStorage.setItem(key, JSON.stringify(data));
+const loadData = key => JSON.parse(localStorage.getItem(key)) || [];
+
+// Log action helper
+function logAction(userId, action, details){
+  const logs = loadData(STORAGE_KEYS.LOGS);
+  logs.push({
+    id: generateId(),
+    action,
+    timestamp: new Date().toISOString(),
+    userId,
+    details,
+  });
+  saveData(STORAGE_KEYS.LOGS, logs);
+}
+
+// --- RBAC and User Context ---
+function getRolePermissions(role){
+  switch(role){
+    case 'admin':
+      return { canViewAllBases:true, canEditAll:true };
+    case 'base_commander':
+      return { canViewAllBases:false, canEditAll:false, baseCommander:true };
+    case 'logistics_officer':
+      return { canViewAllBases:false, canEditAll:false, logistics:true };
+    default:
+      return {};
+  }
+}
+
+// --- Main App Component ---
+function App(){
+  const [userRole, setUserRole] = useState(localStorage.getItem(STORAGE_KEYS.USER_ROLE) || 'admin');
+  const [userBase, setUserBase] = useState(localStorage.getItem(STORAGE_KEYS.USER_BASE) || BASES[0].id);
+  const [personnel] = useState(loadPersonnel());
+  const userInfo = useMemo(() => {
+    if(userRole === 'base_commander'){
+      return personnel.find(p => p.role === 'base_commander' && p.baseId === userBase) || {id: 'unknown'};
+    }
+    if(userRole === 'admin'){
+      return personnel.find(p => p.role === 'admin') || {id: 'admin'};
+    }
+    return {id: 'user'};
+  }, [userRole, userBase, personnel]);
+
+  // Page routing (dashboard, purchases, transfers, assignments)
+  const [page, setPage] = useState('dashboard');
+
+  // Based on role, limit visible bases, edits etc
+  const perms = useMemo(() => getRolePermissions(userRole), [userRole]);
+
+  // Save role and base in localStorage when changed
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.USER_ROLE, userRole);
+  }, [userRole]);
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.USER_BASE, userBase);
+  }, [userBase]);
+
+  // If role is base_commander, allow selecting only their base
+  const availableBases = perms.canViewAllBases ? BASES : BASES.filter(b => b.id === userBase);
+
+  // Nav buttons based on role
+  const navItems = [
+    {id: 'dashboard', label: 'Dashboard', roles: ['admin', 'base_commander', 'logistics_officer']},
+    {id: 'purchases', label: 'Purchases', roles: ['admin', 'base_commander', 'logistics_officer']},
+    {id: 'transfers', label: 'Transfers', roles: ['admin', 'base_commander', 'logistics_officer']},
+    {id: 'assignments', label: 'Assignments & Expenditures', roles: ['admin', 'base_commander']},
+  ];
+
+  return <div>
+    <nav>
+      {navItems.filter(nav => nav.roles.includes(userRole)).map(nav => (
+        <button
+          key={nav.id}
+          className={page === nav.id ? 'active' : ''}
+          onClick={() => setPage(nav.id)}
+        >{nav.label}</button>
+      ))}
+    </nav>
+    {page === 'dashboard' && <Dashboard perms={perms} userBase={userBase} availableBases={availableBases} userInfo={userInfo} />}
+    {page === 'purchases' && <Purchases perms={perms} userBase={userBase} availableBases={availableBases} userInfo={userInfo} />}
+    {page === 'transfers' && <Transfers perms={perms} userBase={userBase} availableBases={availableBases} userInfo={userInfo} />}
+    {page === 'assignments' && <Assignments perms={perms} userBase={userBase} availableBases={availableBases} userInfo={userInfo} />}
+  </div>;
+}
+
+// --- Dashboard Component ---
+function Dashboard({perms, userBase, availableBases, userInfo}){
+  const [filters, setFilters] = useState({date: '', base: userBase, equipmentType: ''});
+  const [popupData, setPopupData] = useState(null);
+
+  // Load data stored in localStorage
+  const purchases = loadData(STORAGE_KEYS.PURCHASES);
+  const transfers = loadData(STORAGE_KEYS.TRANSFERS);
+  const assignments = loadData(STORAGE_KEYS.ASSIGNMENTS);
+
+  // Filter data based on filters and permissions
+  const filterDateStart = filters.date ? new Date(filters.date) : null;
+
+  // Filter purchases by date, base, equipmentType
+  const filteredPurchases = purchases.filter(p => {
+    if(filters.base && p.baseId !== filters.base) return false;
+    if(filters.equipmentType && p.equipmentType !== filters.equipmentType) return false;
+    if(filterDateStart && new Date(p.date) < filterDateStart) return false;
+    return true;
+  });
+
+  // Filter transfers by date, base (consider both from_base and to_base), equipmentType
+  const filteredTransfersIn = transfers.filter(t => {
+    if(filters.base && t.toBaseId !== filters.base) return false;
+    if(filters.equipmentType && t.equipmentType !== filters.equipmentType) return false;
+    if(filterDateStart && new Date(t.timestamp) < filterDateStart) return false;
+    return true;
+  });
+  const filteredTransfersOut = transfers.filter(t => {
+    if(filters.base && t.fromBaseId !== filters.base) return false;
+    if(filters.equipmentType && t.equipmentType !== filters.equipmentType) return false;
+    if(filterDateStart && new Date(t.timestamp) < filterDateStart) return false;
+    return true;
+  });
+
+  // Assignments filtered for base and date/equipment type
+  const filteredAssignments = assignments.filter(a => {
+    if(filters.base && a.baseId !== filters.base) return false;
+    if(filters.equipmentType && a.equipmentType !== filters.equipmentType) return false;
+    if(filterDateStart && new Date(a.date) < filterDateStart) return false;
+    return true;
+  });
+
+  // Calculate Metrics
+  // Opening Balance: Starting stock as zero or sum of purchases/transfers before date
+  // For demo: Opening balance assumed 0 (not tracked separately), closing balance = purchases + transfers in - transfers out - assigned expended
+
+  // Sum Purchases quantity
+  const purchasesSum = filteredPurchases.reduce((r,c) => r + parseInt(c.quantity), 0);
+  // Transfers in sum quantity
+  const transfersInSum = filteredTransfersIn.reduce((r,c) => r + parseInt(c.quantity), 0);
+  // Transfers out sum quantity
+  const transfersOutSum = filteredTransfersOut.reduce((r,c) => r + parseInt(c.quantity), 0);
+  // Assigned assets expended sum quantity
+  const expendedSum = filteredAssignments.reduce((r,c) => r + (c.expended ? parseInt(c.quantity) : 0), 0);
+  // Assigned assets total assigned
+  const assignedSum = filteredAssignments.reduce((r,c) => r + parseInt(c.quantity), 0);
+
+  // Opening Balance fixed to 0 for demo
+  const openingBalance = 0;
+  const netMovement = purchasesSum + transfersInSum - transfersOutSum;
+  const closingBalance = openingBalance + netMovement - expendedSum;
+
+  // Role-limited bases for filter selection
+  const basesOptions = perms.canViewAllBases ? BASES : BASES.filter(b => b.id === userBase);
+
+  // Popup handler for Net Movement details
+  function showNetMovementDetails() {
+    setPopupData({
+      purchases: filteredPurchases,
+      transfersIn: filteredTransfersIn,
+      transfersOut: filteredTransfersOut,
+    });
+  }
+
+  return <div>
+    <h2>Dashboard</h2>
+    <div className="filter-group">
+      <input type="date" aria-label="Filter by date" value={filters.date} onChange={e => setFilters({...filters, date:e.target.value})} />
+      <select aria-label="Filter by base" value={filters.base} onChange={e => setFilters({...filters, base:e.target.value})}>
+        <option value="">All Bases</option>
+        {basesOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      </select>
+      <select aria-label="Filter by equipment type" value={filters.equipmentType} onChange={e => setFilters({...filters, equipmentType:e.target.value})}>
+        <option value="">All Equipment Types</option>
+        {EQUIPMENT_TYPES.map(et => <option key={et} value={et}>{et}</option>)}
+      </select>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Metric</th><th>Value</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Opening Balance</td><td>{openingBalance}</td></tr>
+        <tr><td style={{cursor:'pointer', color:'#3b82f6'}} onClick={showNetMovementDetails}>Net Movement (Purchases + Transfer In - Transfer Out)</td><td>{netMovement}</td></tr>
+        <tr><td>Closing Balance</td><td>{closingBalance}</td></tr>
+        <tr><td>Assigned Assets</td><td>{assignedSum}</td></tr>
+        <tr><td>Expended Assets</td><td>{expendedSum}</td></tr>
+      </tbody>
+    </table>
+
+    {popupData && <Popup onClose={() => setPopupData(null)} title="Net Movement Details">
+      <h3>Purchases</h3>
+      <ItemTable data={popupData.purchases} cols={['date','equipmentType', 'quantity', 'baseId']} headers={['Date','Equipment Type','Quantity', 'Base']} />
+      <h3>Transfers In</h3>
+      <ItemTable data={popupData.transfersIn} cols={['timestamp','equipmentType', 'quantity', 'fromBaseId']} headers={['Timestamp','Equipment Type','Quantity', 'From Base']} />
+      <h3>Transfers Out</h3>
+      <ItemTable data={popupData.transfersOut} cols={['timestamp','equipmentType', 'quantity', 'toBaseId']} headers={['Timestamp','Equipment Type','Quantity', 'To Base']} />
+    </Popup>}
+
+  </div>;
+}
+
+// Table for popup detail rows
+function ItemTable({data, cols, headers}){
+  return <table>
+    <thead>
+      <tr>{headers.map((h,i) => <th key={i}>{h}</th>)}</tr>
+    </thead>
+    <tbody>
+      {data.length === 0 && <tr><td colSpan={headers.length}>No records</td></tr>}
+      {data.map((item,i) => (
+        <tr key={i}>
+          {cols.map(col => col === 'date' || col === 'timestamp' 
+            ? <td key={col}>{formatDate(item[col])}</td>
+            : col.includes('BaseId')
+              ? <td key={col}>{BASES.find(b => b.id === item[col])?.name || 'N/A'}</td>
+              : <td key={col}>{item[col]}</td>)}
+        </tr>
+      ))}
+    </tbody>
+  </table>;
+}
+
+// Popup generic component
+function Popup({title, children, onClose}){
+  return <div className="popup-backdrop" onClick={e => { if(e.target.className === 'popup-backdrop') onClose(); }}>
+    <div className="popup" role="dialog" aria-modal="true" aria-labelledby="popup-title">
+      <button onClick={onClose} aria-label="Close popup" className="popup-close">&times;</button>
+      <h2 id="popup-title">{title}</h2>
+      {children}
+    </div>
+  </div>;
+}
+
+// --- Purchases Page ---
+function Purchases({perms, userBase, availableBases, userInfo}){
+  const [filters, setFilters] = useState({date: '', base: userBase, equipmentType: ''});
+  const [purchases, setPurchases] = useState(loadData(STORAGE_KEYS.PURCHASES));
+  const [form, setForm] = useState({date: '', baseId: userBase, equipmentType: '', quantity: ''});
+  const [message, setMessage] = useState('');
+
+  const basesOptions = perms.canViewAllBases ? BASES : BASES.filter(b => b.id === userBase);
+
+  // Filtered purchases to view
+  const filterDateStart = filters.date ? new Date(filters.date) : null;
+  const filtered = purchases.filter(p => {
+    if(filters.base && p.baseId !== filters.base) return false;
+    if(filters.equipmentType && p.equipmentType !== filters.equipmentType) return false;
+    if(filterDateStart && new Date(p.date) < filterDateStart) return false;
+    return true;
+  }).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  // Handle new purchase form submission
+  const handleAddPurchase = (e) => {
+    e.preventDefault();
+    if(!form.date || !form.baseId || !form.equipmentType || !form.quantity) {
+      setMessage('Please fill all fields.');
+      return;
+    }
+    if(isNaN(form.quantity) || form.quantity <= 0){
+      setMessage('Quantity must be a positive number.');
+      return;
+    }
+    // Add purchase
+    const newPurchase = {
+      id: generateId(),
+      date: form.date,
+      baseId: form.baseId,
+      equipmentType: form.equipmentType,
+      quantity: parseInt(form.quantity, 10),
+      createdBy: userInfo.id,
+    };
+    const updated = [...purchases, newPurchase];
+    saveData(STORAGE_KEYS.PURCHASES, updated);
+    setPurchases(updated);
+    logAction(userInfo.id, 'purchase_added', newPurchase);
+    setForm({...form, quantity: '', date: ''});
+    setMessage('Purchase recorded successfully.');
+  };
+
+  return <div>
+    <h2>Purchases</h2>
+    <form onSubmit={handleAddPurchase} style={{marginBottom: '1rem', display:'flex', flexWrap:'wrap', gap:'1rem', alignItems:'center'}}>
+      <input type="date" aria-label="Purchase date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
+      <select aria-label="Base" value={form.baseId} onChange={e => setForm({...form, baseId: e.target.value})} disabled={!perms.canViewAllBases}>
+        {basesOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      </select>
+      <select aria-label="Equipment Type" value={form.equipmentType} onChange={e => setForm({...form, equipmentType: e.target.value})}>
+        <option value="">Select Equipment Type</option>
+        {EQUIPMENT_TYPES.map(et => <option key={et} value={et}>{et}</option>)}
+      </select>
+      <input type="number" min="1" step="1" aria-label="Quantity" value={form.quantity} onChange={e => setForm({...form, quantity: e.target.value})} placeholder="Quantity" />
+      <button type="submit">Record Purchase</button>
+    </form>
+    {message && <div style={{marginBottom:'1rem', color:'#22c55e'}}>{message}</div>}
+
+    <div className="filter-group">
+      <input type="date" aria-label="Filter Purchases Date" value={filters.date} onChange={e => setFilters({...filters, date: e.target.value})} />
+      <select aria-label="Filter Purchases Base" value={filters.base} onChange={e => setFilters({...filters, base: e.target.value})}>
+        <option value="">All Bases</option>
+        {basesOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      </select>
+      <select aria-label="Filter Purchases Equipment Type" value={filters.equipmentType} onChange={e => setFilters({...filters, equipmentType: e.target.value})}>
+        <option value="">All Equipment Types</option>
+        {EQUIPMENT_TYPES.map(et => <option key={et} value={et}>{et}</option>)}
+      </select>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Base</th><th>Equipment Type</th><th>Quantity</th>
+      </tr></thead>
+      <tbody>
+        {filtered.length === 0 ? <tr><td colSpan="4">No purchases found.</td></tr> : filtered.map(p => (
+          <tr key={p.id}>
+            <td>{formatDate(p.date)}</td>
+            <td>{BASES.find(b => b.id === p.baseId)?.name || 'N/A'}</td>
+            <td>{p.equipmentType}</td>
+            <td>{p.quantity}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>;
+}
+
+// --- Transfers Page ---
+function Transfers({perms, userBase, availableBases, userInfo}){
+  const [filters, setFilters] = useState({date: '', base: userBase, equipmentType: ''});
+  const [transfers, setTransfers] = useState(loadData(STORAGE_KEYS.TRANSFERS));
+  const [form, setForm] = useState({fromBaseId: userBase, toBaseId: '', equipmentType: '', quantity: ''});
+  const [message, setMessage] = useState('');
+
+  const basesOptions = perms.canViewAllBases ? BASES : BASES.filter(b => b.id === userBase);
+
+  // Filter Transfers
+  const filterDateStart = filters.date ? new Date(filters.date) : null;
+  const filtered = transfers.filter(t => {
+    if(filters.base && t.fromBaseId !== filters.base && t.toBaseId !== filters.base) return false;
+    if(filters.equipmentType && t.equipmentType !== filters.equipmentType) return false;
+    if(filterDateStart && new Date(t.timestamp) < filterDateStart) return false;
+    return true;
+  }).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  // Handle new transfer submission
+  const handleAddTransfer = e => {
+    e.preventDefault();
+    if(!form.fromBaseId || !form.toBaseId || !form.equipmentType || !form.quantity){
+      setMessage('Please fill all fields.');
+      return;
+    }
+    if(form.fromBaseId === form.toBaseId){
+      setMessage('From Base and To Base cannot be the same.');
+      return;
+    }
+    if(isNaN(form.quantity) || form.quantity <= 0){
+      setMessage('Quantity must be a positive number.');
+      return;
+    }
+    // Add transfer
+    const newTransfer = {
+      id: generateId(),
+      fromBaseId: form.fromBaseId,
+      toBaseId: form.toBaseId,
+      equipmentType: form.equipmentType,
+      quantity: parseInt(form.quantity, 10),
+      timestamp: new Date().toISOString(),
+      createdBy: userInfo.id,
+    };
+    const updated = [...transfers, newTransfer];
+    saveData(STORAGE_KEYS.TRANSFERS, updated);
+    setTransfers(updated);
+    logAction(userInfo.id, 'transfer_added', newTransfer);
+    setForm({...form, quantity: '', equipmentType: '', toBaseId: ''});
+    setMessage('Transfer recorded successfully.');
+  };
+
+  return <div>
+    <h2>Transfers</h2>
+    <form onSubmit={handleAddTransfer} style={{marginBottom: '1rem', display:'flex', flexWrap:'wrap', gap:'1rem', alignItems:'center'}}>
+      <select aria-label="From Base" value={form.fromBaseId} onChange={e => setForm({...form, fromBaseId: e.target.value})} disabled={!perms.canViewAllBases}>
+        {basesOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      </select>
+      <select aria-label="To Base" value={form.toBaseId} onChange={e => setForm({...form, toBaseId: e.target.value})}>
+        <option value="">Select To Base</option>
+        {basesOptions.filter(b => b.id !== form.fromBaseId).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      </select>
+      <select aria-label="Equipment Type" value={form.equipmentType} onChange={e => setForm({...form, equipmentType: e.target.value})}>
+        <option value="">Select Equipment Type</option>
+        {EQUIPMENT_TYPES.map(et => <option key={et} value={et}>{et}</option>)}
+      </select>
+      <input type="number" min="1" step="1" aria-label="Quantity" value={form.quantity} onChange={e => setForm({...form, quantity: e.target.value})} placeholder="Quantity" />
+      <button type="submit">Record Transfer</button>
+    </form>
+    {message && <div style={{marginBottom:'1rem', color:'#22c55e'}}>{message}</div>}
+
+    <div className="filter-group">
+      <input type="date" aria-label="Filter Transfers Date" value={filters.date} onChange={e => setFilters({...filters, date: e.target.value})} />
+      <select aria-label="Filter Transfers Base" value={filters.base} onChange={e => setFilters({...filters, base: e.target.value})}>
+        <option value="">All Bases</option>
+        {basesOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      </select>
+      <select aria-label="Filter Transfers Equipment Type" value={filters.equipmentType} onChange={e => setFilters({...filters, equipmentType: e.target.value})}>
+        <option value="">All Equipment Types</option>
+        {EQUIPMENT_TYPES.map(et => <option key={et} value={et}>{et}</option>)}
+      </select>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th>Timestamp</th><th>From Base</th><th>To Base</th><th>Equipment Type</th><th>Quantity</th>
+      </tr></thead>
+      <tbody>
+        {filtered.length === 0 ? <tr><td colSpan="5">No transfers found.</td></tr> : filtered.map(t => (
+          <tr key={t.id}>
+            <td>{formatDate(t.timestamp)}</td>
+            <td>{BASES.find(b => b.id === t.fromBaseId)?.name || 'N/A'}</td>
+            <td>{BASES.find(b => b.id === t.toBaseId)?.name || 'N/A'}</td>
+            <td>{t.equipmentType}</td>
+            <td>{t.quantity}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>;
+}
+
+// --- Assignments and Expenditures ---
+function Assignments({perms, userBase, availableBases, userInfo}){
+  const [filters, setFilters] = useState({date:'', base: userBase, equipmentType:''});
+  const [assignments, setAssignments] = useState(loadData(STORAGE_KEYS.ASSIGNMENTS));
+  const [form, setForm] = useState({baseId: userBase, equipmentType: '', quantity: '', personnelId: '', expended: false});
+  const [message, setMessage] = useState('');
+  const [allPersonnel] = useState(loadPersonnel().filter(p => p.role !== 'admin')); // all but admin
+
+  const basesOptions = perms.canViewAllBases ? BASES : BASES.filter(b => b.id === userBase);
+
+  // Filter assignments
+  const filterDateStart = filters.date ? new Date(filters.date) : null;
+  const filtered = assignments.filter(a => {
+    if(filters.base && a.baseId !== filters.base) return false;
+    if(filters.equipmentType && a.equipmentType !== filters.equipmentType) return false;
+    if(filterDateStart && new Date(a.date) < filterDateStart) return false;
+    return true;
+  }).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  // Handle form submit (assign or expend)
+  const handleAddAssignment = e => {
+    e.preventDefault();
+    if(!form.baseId || !form.equipmentType || !form.quantity || !form.personnelId){
+      setMessage('Please fill all fields.');
+      return;
+    }
+    if(isNaN(form.quantity) || form.quantity <= 0){
+      setMessage('Quantity must be a positive number.');
+      return;
+    }
+    const newAssignment = {
+      id: generateId(),
+      baseId: form.baseId,
+      equipmentType: form.equipmentType,
+      quantity: parseInt(form.quantity, 10),
+      personnelId: form.personnelId,
+      expended: form.expended,
+      date: new Date().toISOString(),
+      createdBy: userInfo.id,
+    };
+    const updated = [...assignments, newAssignment];
+    saveData(STORAGE_KEYS.ASSIGNMENTS, updated);
+    setAssignments(updated);
+    logAction(userInfo.id, form.expended ? 'asset_expended' : 'asset_assigned', newAssignment);
+    setForm({...form, quantity: '', equipmentType: '', personnelId: '', expended: false});
+    setMessage(form.expended ? 'Asset marked as expended.' : 'Asset assigned successfully.');
+  };
+
+  return <div>
+    <h2>Assignments & Expenditures</h2>
+    <form onSubmit={handleAddAssignment} style={{marginBottom: '1rem', display:'flex', flexWrap:'wrap', gap:'1rem', alignItems:'center'}}>
+      <select aria-label="Base" value={form.baseId} onChange={e => setForm({...form, baseId: e.target.value})} disabled={!perms.canViewAllBases}>
+        {basesOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      </select>
+      <select aria-label="Equipment Type" value={form.equipmentType} onChange={e => setForm({...form, equipmentType: e.target.value})}>
+        <option value="">Select Equipment Type</option>
+        {EQUIPMENT_TYPES.map(et => <option key={et} value={et}>{et}</option>)}
+      </select>
+      <input type="number" min="1" step="1" aria-label="Quantity" value={form.quantity} onChange={e => setForm({...form, quantity: e.target.value})} placeholder="Quantity" />
+      <select aria-label="Personnel" value={form.personnelId} onChange={e => setForm({...form, personnelId: e.target.value})}>
+        <option value="">Select Personnel</option>
+        {allPersonnel.map(p => (
+          <option key={p.id} value={p.id}>{p.name} ({p.role})</option>
+        ))}
+      </select>
+      <label style={{display:'flex', alignItems:'center', gap:'0.3rem', color:'#a1a1aa'}}>
+        <input type="checkbox" checked={form.expended} onChange={e => setForm({...form, expended: e.target.checked})} />
+        Mark as Expended
+      </label>
+      <button type="submit">{form.expended ? 'Mark Expended' : 'Assign Asset'}</button>
+    </form>
+    {message && <div style={{marginBottom:'1rem', color:'#22c55e'}}>{message}</div>}
+
+    <div className="filter-group">
+      <input type="date" aria-label="Filter Assignments Date" value={filters.date} onChange={e => setFilters({...filters, date: e.target.value})} />
+      <select aria-label="Filter Assignments Base" value={filters.base} onChange={e => setFilters({...filters, base: e.target.value})}>
+        <option value="">All Bases</option>
+        {basesOptions.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+      </select>
+      <select aria-label="Filter Assignments Equipment Type" value={filters.equipmentType} onChange={e => setFilters({...filters, equipmentType: e.target.value})}>
+        <option value="">All Equipment Types</option>
+        {EQUIPMENT_TYPES.map(et => <option key={et} value={et}>{et}</option>)}
+      </select>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Base</th><th>Equipment Type</th><th>Quantity</th><th>Personnel</th><th>Expended</th>
+      </tr></thead>
+      <tbody>
+        {filtered.length === 0 ? <tr><td colSpan="6">No assignments found.</td></tr> : filtered.map(a => (
+          <tr key={a.id}>
+            <td>{formatDate(a.date)}</td>
+            <td>{BASES.find(b => b.id === a.baseId)?.name || 'N/A'}</td>
+            <td>{a.equipmentType}</td>
+            <td>{a.quantity}</td>
+            <td>{allPersonnel.find(p => p.id === a.personnelId)?.name || 'Unknown'}</td>
+            <td>{a.expended ? 'Yes' : 'No'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>;
+}
+
+const root = ReactDOM.createRoot(document.getElementById('app-root'));
+root.render(<App />);
+
+// Role switching logic outside React (because it controls role dropdown)
+document.getElementById('roleSelect').addEventListener('change', e => {
+  const role = e.target.value;
+  localStorage.setItem(STORAGE_KEYS.USER_ROLE, role);
+  location.reload();
+});
+
+</script>
+</body>
+</html>
+
+```
